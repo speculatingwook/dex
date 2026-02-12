@@ -20,6 +20,15 @@ No existing tool gave me what I wanted: a lightweight document editor and a real
 dex .
 ```
 
+<p align="center">
+  <img src="resources/screenshot-2.png" width="49%" alt="dex dark mode" />
+  <img src="resources/screenshot-3.png" width="49%" alt="dex dark mode" />
+</p>
+<p align="center">
+  <img src="resources/screenshot-1.png" width="49%" alt="dex light mode" />
+  <img src="resources/screenshot-4.png" width="49%" alt="dex light mode" />
+</p>
+
 ## Tech Stack
 
 - **Framework**: Electron 39

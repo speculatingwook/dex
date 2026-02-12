@@ -31,6 +31,21 @@ const api = {
   readDir: (dirPath: string) => ipcRenderer.invoke('fs:readDir', dirPath),
   readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
   writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),
+  readFileAsDataURL: (filePath: string) => ipcRenderer.invoke('fs:readFileAsDataURL', filePath),
+
+  watchFile: (filePath: string): void => {
+    ipcRenderer.send('fs:watchFile', filePath)
+  },
+  unwatchFile: (): void => {
+    ipcRenderer.send('fs:unwatchFile')
+  },
+  onFileChanged: (callback: (filePath: string) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, filePath: string): void => callback(filePath)
+    ipcRenderer.on('fs:fileChanged', handler)
+    return () => {
+      ipcRenderer.removeListener('fs:fileChanged', handler)
+    }
+  },
 
   getSettings: (): Promise<AppSettings> => ipcRenderer.invoke('settings:getAll'),
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void> =>

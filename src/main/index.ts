@@ -90,8 +90,60 @@ function isPathSafe(requestedPath: string): boolean {
   return resolved.startsWith(base)
 }
 
+const IMAGE_MIME_MAP: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon'
+}
+
 let ptyProcess: pty.IPty | null = null
 let mainWindow: BrowserWindow | null = null
+let fileWatcher: fsSync.FSWatcher | null = null
+let watchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+function stopFileWatcher(): void {
+  if (watchDebounceTimer) {
+    clearTimeout(watchDebounceTimer)
+    watchDebounceTimer = null
+  }
+  if (fileWatcher) {
+    try {
+      fileWatcher.close()
+    } catch {
+      /* already closed */
+    }
+    fileWatcher = null
+  }
+}
+
+function startFileWatcher(filePath: string): void {
+  stopFileWatcher()
+  if (!isPathSafe(filePath)) return
+
+  try {
+    fileWatcher = fsSync.watch(filePath, (eventType) => {
+      if (eventType !== 'change') return
+      if (watchDebounceTimer) clearTimeout(watchDebounceTimer)
+      watchDebounceTimer = setTimeout(() => {
+        watchDebounceTimer = null
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('fs:fileChanged', filePath)
+        }
+      }, 100)
+    })
+
+    fileWatcher.on('error', () => {
+      stopFileWatcher()
+    })
+  } catch {
+    /* file may not exist or no permissions */
+  }
+}
 
 function killPty(): void {
   if (ptyProcess) {
@@ -217,6 +269,7 @@ function createWindow(): void {
   mainWindow.on('moved', saveBounds)
 
   mainWindow.on('closed', () => {
+    stopFileWatcher()
     killPty()
     mainWindow = null
   })
@@ -353,6 +406,36 @@ function setupFileSystemIPC(): void {
     }
   })
 
+  ipcMain.on('fs:watchFile', (_event, filePath: string) => {
+    startFileWatcher(filePath)
+  })
+
+  ipcMain.on('fs:unwatchFile', () => {
+    stopFileWatcher()
+  })
+
+  ipcMain.handle('fs:readFileAsDataURL', async (_event, filePath: string) => {
+    if (!isPathSafe(filePath)) {
+      return { dataUrl: '', error: 'Access denied' }
+    }
+    try {
+      const stat = await fs.stat(filePath)
+      if (stat.size > 20 * 1024 * 1024) {
+        return { dataUrl: '', error: 'Image too large (>20MB)' }
+      }
+      const ext = path.extname(filePath).toLowerCase()
+      const mime = IMAGE_MIME_MAP[ext]
+      if (!mime) {
+        return { dataUrl: '', error: 'Unsupported image format' }
+      }
+      const buffer = await fs.readFile(filePath)
+      const base64 = buffer.toString('base64')
+      return { dataUrl: `data:${mime};base64,${base64}`, error: null }
+    } catch (err) {
+      return { dataUrl: '', error: (err as Error).message }
+    }
+  })
+
   ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
     if (!isPathSafe(filePath)) {
       return { content: '', language: 'plaintext', error: 'Access denied' }
@@ -446,6 +529,7 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  stopFileWatcher()
   killPty()
 })
 

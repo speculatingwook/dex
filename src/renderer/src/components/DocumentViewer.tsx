@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { Marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
@@ -8,6 +8,7 @@ import { useTheme } from '../hooks/useTheme'
 const CodeMirrorEditor = lazy(() => import('./CodeMirrorEditor'))
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.mdx', '.markdown'])
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp', '.ico'])
 const CODE_EXTENSIONS = new Set([
   '.ts',
   '.tsx',
@@ -41,10 +42,11 @@ const CODE_EXTENSIONS = new Set([
   '.env'
 ])
 
-type ViewMode = 'markdown' | 'code' | 'text' | 'none'
+type ViewMode = 'markdown' | 'code' | 'text' | 'image' | 'none'
 
 function getViewMode(filePath: string): ViewMode {
   const ext = '.' + filePath.split('.').pop()?.toLowerCase()
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image'
   if (MARKDOWN_EXTENSIONS.has(ext)) return 'markdown'
   if (CODE_EXTENSIONS.has(ext)) return 'code'
   return 'text'
@@ -97,6 +99,26 @@ const marked = new Marked(
   })
 )
 
+async function resolveLocalImages(html: string, mdFilePath: string): Promise<string> {
+  const dir = mdFilePath.split('/').slice(0, -1).join('/')
+  const imgRegex = /<img\s+[^>]*src="([^"]*)"[^>]*/gi
+  const matches = [...html.matchAll(imgRegex)]
+
+  let result = html
+  for (const match of matches) {
+    const src = match[1]
+    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('data:')) continue
+
+    const absolutePath = src.startsWith('/') ? src : `${dir}/${src}`
+    const dataResult = await window.api.readFileAsDataURL(absolutePath)
+    if (dataResult.error) continue
+
+    result = result.replace(src, dataResult.dataUrl)
+  }
+
+  return result
+}
+
 interface DocumentViewerProps {
   filePath: string | null
 }
@@ -104,12 +126,14 @@ interface DocumentViewerProps {
 export default function DocumentViewer({ filePath }: DocumentViewerProps): React.JSX.Element {
   const [content, setContent] = useState('')
   const [renderedHtml, setRenderedHtml] = useState('')
+  const [imageDataUrl, setImageDataUrl] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('none')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [modifiedContent, setModifiedContent] = useState('')
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | null>(null)
+  const [externalChange, setExternalChange] = useState(false)
   
   const { settings } = useSettings()
   const { resolvedTheme } = useTheme()
@@ -119,58 +143,115 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
   const codeFontSize = Math.max(fontSize - 1, 10)
   const wordWrap = settings?.wordWrap ?? false
 
-  useEffect(() => {
-    if (!filePath) {
-      setViewMode('none')
-      setIsEditing(false)
-      setModifiedContent('')
-      return
-    }
+  const justSavedRef = useRef(false)
+  const isEditingRef = useRef(false)
+  const isDirtyRef = useRef(false)
+  const currentFileRef = useRef<string | null>(null)
 
-    setLoading(true)
-    setError(null)
-    setIsEditing(false)
-    setModifiedContent('')
-    setSaveStatus(null)
+  isEditingRef.current = isEditing
 
-    window.api.readFile(filePath).then(async (result) => {
+  const loadFileContent = useCallback(async (fp: string): Promise<void> => {
+    const mode = getViewMode(fp)
+
+    if (mode === 'image') {
+      const result = await window.api.readFileAsDataURL(fp)
       if (result.error) {
         setError(result.error)
         setLoading(false)
         return
       }
+      setViewMode('image')
+      setImageDataUrl(result.dataUrl)
+      setLoading(false)
+      return
+    }
 
-      const mode = getViewMode(filePath)
-      setViewMode(mode)
-      setContent(result.content)
-      setModifiedContent(result.content)
+    const result = await window.api.readFile(fp)
+    if (result.error) {
+      setError(result.error)
+      setLoading(false)
+      return
+    }
 
-      if (mode === 'markdown') {
-        const html = await marked.parse(result.content)
-        setRenderedHtml(html as string)
-      } else if (mode === 'code') {
-        const lang = getLanguageForExt(filePath)
-        const highlighted = hljs.getLanguage(lang)
-          ? hljs.highlight(result.content, { language: lang }).value
-          : result.content
-        setRenderedHtml(highlighted)
+    setViewMode(mode)
+    setContent(result.content)
+    setModifiedContent(result.content)
+
+    if (mode === 'markdown') {
+      let html = await marked.parse(result.content) as string
+      html = await resolveLocalImages(html, fp)
+      setRenderedHtml(html)
+    } else if (mode === 'code') {
+      const lang = getLanguageForExt(fp)
+      const highlighted = hljs.getLanguage(lang)
+        ? hljs.highlight(result.content, { language: lang }).value
+        : result.content
+      setRenderedHtml(highlighted)
+    }
+
+    setLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (!filePath) {
+      setViewMode('none')
+      setIsEditing(false)
+      setModifiedContent('')
+      setImageDataUrl('')
+      setExternalChange(false)
+      window.api.unwatchFile()
+      currentFileRef.current = null
+      return
+    }
+
+    currentFileRef.current = filePath
+    setLoading(true)
+    setError(null)
+    setIsEditing(false)
+    setModifiedContent('')
+    setImageDataUrl('')
+    setSaveStatus(null)
+    setExternalChange(false)
+
+    loadFileContent(filePath)
+
+    window.api.watchFile(filePath)
+
+    const cleanup = window.api.onFileChanged((changedPath) => {
+      if (changedPath !== currentFileRef.current) return
+      if (justSavedRef.current) return
+
+      if (isEditingRef.current && isDirtyRef.current) {
+        setExternalChange(true)
+        return
       }
 
-      setLoading(false)
+      loadFileContent(changedPath)
     })
-  }, [filePath])
+
+    return () => {
+      cleanup()
+      window.api.unwatchFile()
+    }
+  }, [filePath, loadFileContent])
 
   const handleSave = async (): Promise<void> => {
     if (!filePath) return
     setSaveStatus('saving')
+
+    justSavedRef.current = true
+    setTimeout(() => { justSavedRef.current = false }, 500)
+
     try {
       await window.api.writeFile(filePath, modifiedContent)
       setSaveStatus('saved')
       setContent(modifiedContent)
+      setExternalChange(false)
       
       if (viewMode === 'markdown') {
-        const html = await marked.parse(modifiedContent)
-        setRenderedHtml(html as string)
+        let html = await marked.parse(modifiedContent) as string
+        html = await resolveLocalImages(html, filePath)
+        setRenderedHtml(html)
       } else if (viewMode === 'code') {
         const lang = getLanguageForExt(filePath)
         const highlighted = hljs.getLanguage(lang)
@@ -189,16 +270,24 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
   const toggleEdit = (): void => {
     if (!isEditing) {
       setModifiedContent(content)
+      setExternalChange(false)
     }
     setIsEditing(!isEditing)
+  }
+
+  const containerStyle: React.CSSProperties = {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden'
   }
 
   if (viewMode === 'none') {
     return (
       <div
         style={{
-          flex: 1,
-          display: 'flex',
+          ...containerStyle,
           alignItems: 'center',
           justifyContent: 'center',
           color: 'var(--text-muted)',
@@ -215,8 +304,7 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
     return (
       <div
         style={{
-          flex: 1,
-          display: 'flex',
+          ...containerStyle,
           alignItems: 'center',
           justifyContent: 'center',
           color: 'var(--text-muted)',
@@ -232,8 +320,7 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
     return (
       <div
         style={{
-          flex: 1,
-          display: 'flex',
+          ...containerStyle,
           alignItems: 'center',
           justifyContent: 'center',
           color: 'var(--text-error)',
@@ -249,9 +336,10 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
 
   const fileName = filePath ? filePath.split('/').pop() : ''
   const isDirty = modifiedContent !== content
+  isDirtyRef.current = isDirty
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{ ...containerStyle, height: '100%' }}>
       <div
         style={{
           height: 36,
@@ -285,6 +373,11 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {externalChange && (
+            <span style={{ fontSize: 11, color: 'var(--accent)', fontStyle: 'italic' }}>
+              File changed on disk
+            </span>
+          )}
           {isEditing && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                {saveStatus === 'saved' && (
@@ -309,25 +402,49 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
               </button>
             </div>
           )}
-          <button
-            onClick={toggleEdit}
-            style={{
-              background: isEditing ? 'var(--bg-button)' : 'transparent',
-              border: '1px solid var(--border-button)',
-              color: 'var(--text-primary)',
-              fontSize: 12,
-              padding: '2px 8px',
-              borderRadius: 4,
-              cursor: 'pointer'
-            }}
-          >
-            {isEditing ? 'View' : 'Edit'}
-          </button>
+          {viewMode !== 'image' && (
+            <button
+              onClick={toggleEdit}
+              style={{
+                background: isEditing ? 'var(--bg-button)' : 'transparent',
+                border: '1px solid var(--border-button)',
+                color: 'var(--text-primary)',
+                fontSize: 12,
+                padding: '2px 8px',
+                borderRadius: 4,
+                cursor: 'pointer'
+              }}
+            >
+              {isEditing ? 'View' : 'Edit'}
+            </button>
+          )}
         </div>
       </div>
 
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {isEditing ? (
+        {viewMode === 'image' ? (
+          <div
+            style={{
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--bg-tertiary)',
+              padding: 24,
+              overflow: 'auto'
+            }}
+          >
+            <img
+              src={imageDataUrl}
+              alt={fileName || ''}
+              style={{
+                maxWidth: '100%',
+                maxHeight: '100%',
+                objectFit: 'contain'
+              }}
+            />
+          </div>
+        ) : isEditing ? (
           <Suspense fallback={
             <div style={{ 
               display: 'flex', 
@@ -367,10 +484,9 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
               />
             </div>
           ) : (
-            <div style={{ height: '100%', overflowY: 'auto', background: 'var(--bg-tertiary)' }}>
+            <div style={{ height: '100%', overflow: 'auto', background: 'var(--bg-tertiary)' }}>
               <table style={{
                 borderCollapse: 'collapse',
-                width: '100%',
                 fontFamily,
                 fontSize: codeFontSize,
                 lineHeight: '20px'

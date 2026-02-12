@@ -10,6 +10,11 @@ export interface FileContent {
   error: string | null
 }
 
+export interface FileDataURLResult {
+  dataUrl: string
+  error: string | null
+}
+
 export interface ReadDirResult {
   data: FileEntry[]
   error: string | null
@@ -38,6 +43,11 @@ export interface Api {
   readDir: (dirPath: string) => Promise<ReadDirResult>
   readFile: (filePath: string) => Promise<FileContent>
   writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error: string | null }>
+  readFileAsDataURL: (filePath: string) => Promise<FileDataURLResult>
+
+  watchFile: (filePath: string) => void
+  unwatchFile: () => void
+  onFileChanged: (callback: (filePath: string) => void) => () => void
 
   getSettings: () => Promise<AppSettings>
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
