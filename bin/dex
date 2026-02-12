@@ -1,0 +1,12 @@
+#!/bin/bash
+DIR="${1:-.}"
+DIR="$(cd "$DIR" 2>/dev/null && pwd || echo "$DIR")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_PATH="/Applications/dex.app/Contents/MacOS/dex"
+
+if [ -x "$APP_PATH" ]; then
+  "$APP_PATH" "--working-dir=$DIR" &
+else
+  cd "$SCRIPT_DIR/.."
+  npx electron-vite dev -- "--working-dir=$DIR"
+fi
