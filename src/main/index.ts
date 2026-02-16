@@ -105,6 +105,8 @@ let ptyProcess: pty.IPty | null = null
 let mainWindow: BrowserWindow | null = null
 let fileWatcher: fsSync.FSWatcher | null = null
 let watchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let treeWatcher: fsSync.FSWatcher | null = null
+let treeWatchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 function stopFileWatcher(): void {
   if (watchDebounceTimer) {
@@ -143,6 +145,47 @@ function startFileWatcher(filePath: string): void {
   } catch {
     /* file may not exist or no permissions */
   }
+}
+
+function stopTreeWatcher(): void {
+  if (treeWatchDebounceTimer) {
+    clearTimeout(treeWatchDebounceTimer)
+    treeWatchDebounceTimer = null
+  }
+
+  if (treeWatcher) {
+    try {
+      treeWatcher.close()
+    } catch {
+      /* already closed */
+    }
+    treeWatcher = null
+  }
+}
+
+function startTreeWatcher(rootPath: string): void {
+  stopTreeWatcher()
+  if (!isPathSafe(rootPath)) return
+
+  try {
+    treeWatcher = fsSync.watch(
+      rootPath,
+      { recursive: process.platform === 'darwin' || process.platform === 'win32' },
+      () => {
+        if (treeWatchDebounceTimer) clearTimeout(treeWatchDebounceTimer)
+        treeWatchDebounceTimer = setTimeout(() => {
+          treeWatchDebounceTimer = null
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('fs:treeChanged')
+          }
+        }, 120)
+      }
+    )
+
+    treeWatcher.on('error', () => {
+      stopTreeWatcher()
+    })
+  } catch {}
 }
 
 function killPty(): void {
@@ -270,6 +313,7 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     stopFileWatcher()
+    stopTreeWatcher()
     killPty()
     mainWindow = null
   })
@@ -414,6 +458,14 @@ function setupFileSystemIPC(): void {
     stopFileWatcher()
   })
 
+  ipcMain.on('fs:watchTree', (_event, rootPath: string) => {
+    startTreeWatcher(rootPath)
+  })
+
+  ipcMain.on('fs:unwatchTree', () => {
+    stopTreeWatcher()
+  })
+
   ipcMain.handle('fs:readFileAsDataURL', async (_event, filePath: string) => {
     if (!isPathSafe(filePath)) {
       return { dataUrl: '', error: 'Access denied' }
@@ -530,6 +582,7 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   stopFileWatcher()
+  stopTreeWatcher()
   killPty()
 })
 

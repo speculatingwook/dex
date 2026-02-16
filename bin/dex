@@ -5,8 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_PATH="/Applications/dex.app/Contents/MacOS/dex"
 
 if [ -x "$APP_PATH" ]; then
-  "$APP_PATH" "--working-dir=$DIR" &
+  if [ "$(uname)" = "Darwin" ] && command -v open >/dev/null 2>&1; then
+    open -na "/Applications/dex.app" --args "--working-dir=$DIR" >/dev/null 2>&1
+  else
+    nohup "$APP_PATH" "--working-dir=$DIR" >/dev/null 2>&1 &
+  fi
 else
   cd "$SCRIPT_DIR/.."
-  npx electron-vite dev -- "--working-dir=$DIR"
+  nohup npx electron-vite dev -- "--working-dir=$DIR" >/dev/null 2>&1 &
 fi

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { FileEntry } from '../../../preload/index.d'
 
 interface UseFileTreeReturn {
@@ -15,6 +15,7 @@ export function useFileTree(onFileSelect: (path: string) => void): UseFileTreeRe
   const [entries, setEntries] = useState<Map<string, FileEntry[]>>(new Map())
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set())
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const expandedDirsRef = useRef<Set<string>>(new Set())
 
   const loadDir = useCallback(async (dirPath: string) => {
     const result = await window.api.readDir(dirPath)
@@ -26,6 +27,10 @@ export function useFileTree(onFileSelect: (path: string) => void): UseFileTreeRe
       })
     }
   }, [])
+
+  useEffect(() => {
+    expandedDirsRef.current = expandedDirs
+  }, [expandedDirs])
 
   useEffect(() => {
     window.api.getWorkingDir().then((dir) => {
@@ -60,6 +65,22 @@ export function useFileTree(onFileSelect: (path: string) => void): UseFileTreeRe
     },
     [onFileSelect]
   )
+
+  useEffect(() => {
+    if (!rootDir) return
+
+    window.api.watchTree(rootDir)
+    const cleanup = window.api.onTreeChanged(() => {
+      const dirsToReload = new Set(expandedDirsRef.current)
+      dirsToReload.add(rootDir)
+      void Promise.all(Array.from(dirsToReload).map((dir) => loadDir(dir)))
+    })
+
+    return () => {
+      cleanup()
+      window.api.unwatchTree()
+    }
+  }, [rootDir, loadDir])
 
   return { rootDir, entries, expandedDirs, toggleDir, selectedFile, selectFile }
 }

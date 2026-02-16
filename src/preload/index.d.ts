@@ -42,12 +42,18 @@ export interface Api {
   getWorkingDir: () => Promise<string>
   readDir: (dirPath: string) => Promise<ReadDirResult>
   readFile: (filePath: string) => Promise<FileContent>
-  writeFile: (filePath: string, content: string) => Promise<{ success: boolean; error: string | null }>
+  writeFile: (
+    filePath: string,
+    content: string
+  ) => Promise<{ success: boolean; error: string | null }>
   readFileAsDataURL: (filePath: string) => Promise<FileDataURLResult>
 
   watchFile: (filePath: string) => void
   unwatchFile: () => void
   onFileChanged: (callback: (filePath: string) => void) => () => void
+  watchTree: (rootPath: string) => void
+  unwatchTree: () => void
+  onTreeChanged: (callback: () => void) => () => void
 
   getSettings: () => Promise<AppSettings>
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>

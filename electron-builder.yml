@@ -12,6 +12,11 @@ files:
 asarUnpack:
   - resources/**
   - node_modules/node-pty/**
+publish:
+  provider: github
+  owner: speculatingwook
+  repo: dex
+  releaseType: release
 win:
   executableName: dex
 nsis:
@@ -24,10 +29,16 @@ mac:
   identity: null
   notarize: false
   target:
-    - dmg
-    - dir
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-${arch}.${ext}
 linux:
   target:
     - AppImage

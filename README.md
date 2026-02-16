@@ -11,6 +11,7 @@ No existing tool gave me what I wanted: a lightweight document editor and a real
 **dex** = **D**ocs + **Ex**ecution. A single workspace where you can browse, preview, and edit your project files on the left while running AI agents (or anything else) in a fully functional terminal on the right.
 
 **Typical workflow:**
+
 1. `dex .` — open dex in your project
 2. Browse and edit docs, specs, or notes on the left panel
 3. Run `opencode` or any AI agent in the terminal on the right
@@ -42,7 +43,9 @@ dex .
 ## Key Features
 
 ### 1. Split Panel Layout
+
 The application features a flexible dual-panel architecture designed for maximum screen utility.
+
 - **Side-by-Side View**: A file tree and document viewer on the left, and a terminal on the right.
 - **Draggable Divider**: Adjust the workspace ratio with a smooth, animated divider.
 - **Collapsible Elements**:
@@ -55,7 +58,9 @@ The application features a flexible dual-panel architecture designed for maximum
 - **Persistence**: Window dimensions (size, position) and the split position are saved across sessions.
 
 ### 2. Terminal Emulator
+
 A production-grade terminal implementation using `node-pty` and `xterm.js` v6.
+
 - **Shell Auto-detection**: Automatically detects the user's preferred shell.
   - Unix: Checks `$SHELL`, then falls back to `/bin/zsh`, `/bin/bash`, or `/bin/sh`.
   - Windows: Checks `%COMSPEC%`, then falls back to `powershell.exe` or `cmd.exe`.
@@ -73,7 +78,9 @@ A production-grade terminal implementation using `node-pty` and `xterm.js` v6.
 - **Scrollback**: Configurable buffer range from 1,000 to 50,000 lines (default 5,000).
 
 ### 3. File Tree
+
 A lightweight, efficient file navigator.
+
 - **Lazy Loading**: Directory contents are loaded on demand to handle large projects.
 - **Smart Sorting**: Directories are listed first, followed by files in alphabetical order (case-insensitive).
 - **Hidden Files**: Supports toggling hidden files (off by default).
@@ -81,14 +88,18 @@ A lightweight, efficient file navigator.
 - **UI Design**: Fixed width of 220px when expanded, collapsing to a 36px sidebar.
 
 ### 4. Document Viewer & Editor
+
 The document panel supports viewing and editing with a toggle between the two modes.
 
 **View Mode** (read-only, optimized rendering):
+
 - **Markdown**: GitHub Flavored Markdown rendering via `marked` + `github-markdown-css`, with syntax-highlighted code blocks via `highlight.js`. Max width 800px.
+- **Mermaid**: Fenced `mermaid` code blocks render as diagrams directly in Markdown preview.
 - **Code**: Syntax highlighting for 30+ languages (TypeScript, JavaScript, Python, Go, Rust, Java, C/C++, Ruby, SQL, YAML, and more). Line numbers and monospace font.
 - **Plain Text**: Clean monospace rendering with line numbers.
 
 **Edit Mode** (full CodeMirror 6 editor):
+
 - Toggle between View and Edit with a single click on the header bar.
 - Powered by CodeMirror 6 with `basicSetup` — line numbers, bracket matching, auto-indent, search/replace (`Cmd+F`), and more.
 - Syntax highlighting for all supported languages via `@codemirror/language-data` (dynamic loading).
@@ -99,12 +110,15 @@ The document panel supports viewing and editing with a toggle between the two mo
 - Lazy-loaded — the editor chunk is only fetched when entering Edit mode.
 
 **Capabilities & Limits**:
+
 - Maximum file size: 5MB.
 - Binary file detection with graceful error messaging.
 - Path traversal protection — cannot access files outside the working directory.
 
 ### 5. Theme System
+
 A unified theme engine that ensures visual consistency across the UI and terminal.
+
 - **Modes**: Light, Dark, and System.
 - **System Synchronization**: Real-time appearance tracking via Electron's `nativeTheme` API.
 - **Themed Components**:
@@ -113,7 +127,9 @@ A unified theme engine that ensures visual consistency across the UI and termina
   - UI: Driven by CSS custom properties.
 
 ### 6. Settings Management
+
 Access settings via `⌘+,` or the gear icon.
+
 - **Interface**: Modal overlay with a backdrop blur effect.
 - **Customization Options**:
   - **Theme**: Segmented control for Light/Dark/System.
@@ -125,7 +141,9 @@ Access settings via `⌘+,` or the gear icon.
 - **Real-time Application**: Changes apply instantly without requiring an app restart.
 
 ### 7. Application Menu (macOS)
+
 Standard macOS menu integration:
+
 - **dex**: About, Settings, Services, Hide/Quit.
 - **File**: Toggle Sidebar (⌘+B), Close.
 - **Edit**: Undo, Redo, Cut, Copy, Paste, Select All.
@@ -133,7 +151,9 @@ Standard macOS menu integration:
 - **Window**: Standard window management.
 
 ### 8. CLI Usage
+
 The `dex` command-line interface allows for quick project launches.
+
 - **Usage**: `dex [path]` (defaults to `.` if no path is provided).
 - **Execution Logic**:
   - If the app is installed, it launches the packaged binary.
@@ -172,6 +192,7 @@ src/
 ## IPC Channels
 
 ### Terminal
+
 - `terminal:ready`: Notifies the main process the terminal is ready for PTY spawn.
 - `terminal:write`: Sends data from renderer to PTY.
 - `terminal:resize`: Synchronizes terminal dimensions with PTY.
@@ -179,12 +200,14 @@ src/
 - `terminal:exit`: Handles PTY termination events.
 
 ### File System
+
 - `fs:getWorkingDir`: Retrieves the current application context directory.
 - `fs:readDir`: Lists files and directories for a given path.
 - `fs:readFile`: Safely reads file content for the viewer.
 - `fs:writeFile`: Writes file content from the editor (path-validated).
 
 ### Settings & Theme
+
 - `settings:getAll`: Fetches all saved configurations.
 - `settings:set`: Updates specific settings.
 - `settings:getMonospaceFonts`: Returns the list of supported fonts.
@@ -194,6 +217,7 @@ src/
 - `theme:updated`: Event emitted on theme change.
 
 ### UI Controls
+
 - `menu:openSettings`: Triggers the settings modal via menu.
 - `menu:toggleSidebar`: Toggles the visibility of the sidebar.
 
@@ -201,18 +225,18 @@ src/
 
 The `settings.json` file (located at `~/Library/Application Support/dex/settings.json` on macOS) uses the following schema:
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `themeMode` | `"light" \| "dark" \| "system"` | `"system"` | Appearance mode |
-| `fontFamily` | `string` | `"Menlo, Monaco, \"Courier New\", monospace"` | Monospace font family for terminal and code viewer |
-| `fontSize` | `number` | `14` | Font size in pixels (range: 8–32) |
-| `terminalScrollback` | `number` | `5000` | Terminal scrollback buffer lines (range: 1,000–50,000) |
-| `showHiddenFiles` | `boolean` | `false` | Show dotfiles and hidden patterns in file tree |
-| `wordWrap` | `boolean` | `false` | Enable line wrapping in the document viewer |
-| `windowBounds` | `object` | `{ width: 1400, height: 900 }` | Persisted window size and position `{ width, height, x, y }` |
-| `splitPosition` | `number \| null` | `null` | Left panel width in pixels (`null` = 50% of window) |
-| `fileTreeCollapsed` | `boolean` | `false` | Whether the file tree sidebar is collapsed |
-| `leftPanelCollapsed` | `boolean` | `false` | Whether the entire left panel is collapsed |
+| Field                | Type                            | Default                                       | Description                                                  |
+| -------------------- | ------------------------------- | --------------------------------------------- | ------------------------------------------------------------ |
+| `themeMode`          | `"light" \| "dark" \| "system"` | `"system"`                                    | Appearance mode                                              |
+| `fontFamily`         | `string`                        | `"Menlo, Monaco, \"Courier New\", monospace"` | Monospace font family for terminal and code viewer           |
+| `fontSize`           | `number`                        | `14`                                          | Font size in pixels (range: 8–32)                            |
+| `terminalScrollback` | `number`                        | `5000`                                        | Terminal scrollback buffer lines (range: 1,000–50,000)       |
+| `showHiddenFiles`    | `boolean`                       | `false`                                       | Show dotfiles and hidden patterns in file tree               |
+| `wordWrap`           | `boolean`                       | `false`                                       | Enable line wrapping in the document viewer                  |
+| `windowBounds`       | `object`                        | `{ width: 1400, height: 900 }`                | Persisted window size and position `{ width, height, x, y }` |
+| `splitPosition`      | `number \| null`                | `null`                                        | Left panel width in pixels (`null` = 50% of window)          |
+| `fileTreeCollapsed`  | `boolean`                       | `false`                                       | Whether the file tree sidebar is collapsed                   |
+| `leftPanelCollapsed` | `boolean`                       | `false`                                       | Whether the entire left panel is collapsed                   |
 
 ## Security
 
@@ -243,10 +267,12 @@ The `settings.json` file (located at `~/Library/Application Support/dex/settings
 ## Development
 
 ### Prerequisites
+
 - Node.js 20+
 - npm
 
 ### Setup
+
 1. Clone the repository.
 2. Install dependencies:
    ```bash
@@ -254,6 +280,7 @@ The `settings.json` file (located at `~/Library/Application Support/dex/settings
    ```
 
 ### Scripts
+
 - `npm run dev`: Start electron-vite in watch mode.
 - `npm run typecheck`: Run TypeScript compiler check.
 - `npm run lint`: Lint the codebase.
@@ -271,7 +298,7 @@ Ensure `npmRebuild: true` is set in the `electron-builder` configuration to corr
 
 ## Dependencies
 
-- **codemirror** + **@codemirror/***: Code editor (state, view, commands, language-data, search, autocomplete, theme-one-dark).
+- **codemirror** + **@codemirror/\***: Code editor (state, view, commands, language-data, search, autocomplete, theme-one-dark).
 - **@xterm/xterm**: Core terminal emulator.
 - **@xterm/addon-fit**: Terminal auto-resizing.
 - **@xterm/addon-unicode11**: Wide character and box-drawing support.

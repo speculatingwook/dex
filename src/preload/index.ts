@@ -30,7 +30,8 @@ const api = {
   getWorkingDir: (): Promise<string> => ipcRenderer.invoke('fs:getWorkingDir'),
   readDir: (dirPath: string) => ipcRenderer.invoke('fs:readDir', dirPath),
   readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
-  writeFile: (filePath: string, content: string) => ipcRenderer.invoke('fs:writeFile', filePath, content),
+  writeFile: (filePath: string, content: string) =>
+    ipcRenderer.invoke('fs:writeFile', filePath, content),
   readFileAsDataURL: (filePath: string) => ipcRenderer.invoke('fs:readFileAsDataURL', filePath),
 
   watchFile: (filePath: string): void => {
@@ -40,10 +41,25 @@ const api = {
     ipcRenderer.send('fs:unwatchFile')
   },
   onFileChanged: (callback: (filePath: string) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, filePath: string): void => callback(filePath)
+    const handler = (_event: Electron.IpcRendererEvent, filePath: string): void =>
+      callback(filePath)
     ipcRenderer.on('fs:fileChanged', handler)
     return () => {
       ipcRenderer.removeListener('fs:fileChanged', handler)
+    }
+  },
+
+  watchTree: (rootPath: string): void => {
+    ipcRenderer.send('fs:watchTree', rootPath)
+  },
+  unwatchTree: (): void => {
+    ipcRenderer.send('fs:unwatchTree')
+  },
+  onTreeChanged: (callback: () => void): (() => void) => {
+    const handler = (): void => callback()
+    ipcRenderer.on('fs:treeChanged', handler)
+    return () => {
+      ipcRenderer.removeListener('fs:treeChanged', handler)
     }
   },
 

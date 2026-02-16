@@ -41,7 +41,6 @@ export default function FileTree({ onSelectFile }: FileTreeProps): React.JSX.Ele
           color: 'var(--text-muted)',
           borderBottom: '1px solid var(--border)',
           flexShrink: 0,
-          marginTop: 28,
           display: 'flex',
           alignItems: 'center',
           justifyContent: collapsed ? 'center' : 'space-between',

@@ -10,6 +10,7 @@ import { SettingsContext, useSettingsProvider } from './hooks/useSettings'
 import type { ThemeMode } from './hooks/useTheme'
 
 function AppInner(): React.JSX.Element {
+  const TITLEBAR_HEIGHT = 40
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -47,23 +48,41 @@ function AppInner(): React.JSX.Element {
   }, [])
 
   return (
-    <>
+    <div style={{ height: '100vh', width: '100vw', display: 'flex', flexDirection: 'column' }}>
+      <div
+        style={{
+          height: TITLEBAR_HEIGHT,
+          minHeight: TITLEBAR_HEIGHT,
+          background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex',
+          alignItems: 'center',
+          paddingLeft: 80,
+          fontSize: 12,
+          color: 'var(--text-muted)',
+          ...({ WebkitAppRegion: 'drag' } as React.CSSProperties)
+        }}
+      >
+        dex
+      </div>
       <Toolbar onOpenSettings={() => setSettingsOpen(true)} />
-      <SplitPanel
-        leftCollapsed={leftCollapsed}
-        onToggleCollapse={toggleCollapse}
-        left={
-          <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-            <FileTree onSelectFile={handleFileSelect} />
-            <DocumentViewer filePath={selectedFile} />
-          </div>
-        }
-        right={<TerminalPanel />}
-      />
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <SplitPanel
+          leftCollapsed={leftCollapsed}
+          onToggleCollapse={toggleCollapse}
+          left={
+            <div style={{ display: 'flex', width: '100%', height: '100%' }}>
+              <FileTree onSelectFile={handleFileSelect} />
+              <DocumentViewer filePath={selectedFile} />
+            </div>
+          }
+          right={<TerminalPanel />}
+        />
+      </div>
       {SettingsModal && (
         <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       )}
-    </>
+    </div>
   )
 }
 

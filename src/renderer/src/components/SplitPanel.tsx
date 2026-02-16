@@ -28,13 +28,16 @@ export default function SplitPanel({
     }
   }, [leftWidth])
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (leftCollapsed) return
-    e.preventDefault()
-    isDragging.current = true
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-  }, [leftCollapsed])
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      if (leftCollapsed) return
+      e.preventDefault()
+      isDragging.current = true
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+    },
+    [leftCollapsed]
+  )
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent): void => {
@@ -71,7 +74,7 @@ export default function SplitPanel({
   const resolvedLeftWidth = leftCollapsed ? 0 : (leftWidth ?? 600)
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', height: '100vh', width: '100vw' }}>
+    <div ref={containerRef} style={{ display: 'flex', height: '100%', width: '100%' }}>
       <div
         style={{
           width: resolvedLeftWidth,

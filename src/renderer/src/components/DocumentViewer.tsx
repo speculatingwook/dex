@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { Marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
+import mermaid from 'mermaid'
 import { useSettings } from '../hooks/useSettings'
 import { useTheme } from '../hooks/useTheme'
 
@@ -119,6 +120,22 @@ async function resolveLocalImages(html: string, mdFilePath: string): Promise<str
   return result
 }
 
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+}
+
+function resolveMermaidBlocks(html: string): string {
+  return html.replace(
+    /<pre><code class="[^"]*language-mermaid[^"]*">([\s\S]*?)<\/code><\/pre>/gi,
+    (_, encodedCode: string) => `<div class="mermaid">${decodeHtmlEntities(encodedCode)}</div>`
+  )
+}
+
 interface DocumentViewerProps {
   filePath: string | null
 }
@@ -134,10 +151,10 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
   const [modifiedContent, setModifiedContent] = useState('')
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error' | null>(null)
   const [externalChange, setExternalChange] = useState(false)
-  
+
   const { settings } = useSettings()
   const { resolvedTheme } = useTheme()
-  
+
   const fontFamily = settings?.fontFamily ?? 'Menlo, Monaco, "Courier New", monospace'
   const fontSize = settings?.fontSize ?? 14
   const codeFontSize = Math.max(fontSize - 1, 10)
@@ -147,6 +164,7 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
   const isEditingRef = useRef(false)
   const isDirtyRef = useRef(false)
   const currentFileRef = useRef<string | null>(null)
+  const markdownRef = useRef<HTMLDivElement | null>(null)
 
   isEditingRef.current = isEditing
 
@@ -178,8 +196,9 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
     setModifiedContent(result.content)
 
     if (mode === 'markdown') {
-      let html = await marked.parse(result.content) as string
+      let html = (await marked.parse(result.content)) as string
       html = await resolveLocalImages(html, fp)
+      html = resolveMermaidBlocks(html)
       setRenderedHtml(html)
     } else if (mode === 'code') {
       const lang = getLanguageForExt(fp)
@@ -235,22 +254,39 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
     }
   }, [filePath, loadFileContent])
 
+  useEffect(() => {
+    if (viewMode !== 'markdown' || isEditing || !markdownRef.current) return
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: resolvedTheme === 'dark' ? 'dark' : 'default',
+      securityLevel: 'strict'
+    })
+
+    void mermaid.run({
+      nodes: Array.from(markdownRef.current.querySelectorAll('.mermaid'))
+    })
+  }, [renderedHtml, resolvedTheme, viewMode, isEditing])
+
   const handleSave = async (): Promise<void> => {
     if (!filePath) return
     setSaveStatus('saving')
 
     justSavedRef.current = true
-    setTimeout(() => { justSavedRef.current = false }, 500)
+    setTimeout(() => {
+      justSavedRef.current = false
+    }, 500)
 
     try {
       await window.api.writeFile(filePath, modifiedContent)
       setSaveStatus('saved')
       setContent(modifiedContent)
       setExternalChange(false)
-      
+
       if (viewMode === 'markdown') {
-        let html = await marked.parse(modifiedContent) as string
+        let html = (await marked.parse(modifiedContent)) as string
         html = await resolveLocalImages(html, filePath)
+        html = resolveMermaidBlocks(html)
         setRenderedHtml(html)
       } else if (viewMode === 'code') {
         const lang = getLanguageForExt(filePath)
@@ -352,14 +388,16 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
           padding: '0 16px'
         }}
       >
-        <div style={{ 
-          fontSize: 13, 
-          fontWeight: 500, 
-          color: 'var(--text-secondary)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6
-        }}>
+        <div
+          style={{
+            fontSize: 13,
+            fontWeight: 500,
+            color: 'var(--text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
+          }}
+        >
           {fileName}
           {isDirty && (
             <div
@@ -380,10 +418,10 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
           )}
           {isEditing && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-               {saveStatus === 'saved' && (
+              {saveStatus === 'saved' && (
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Saved</span>
               )}
-               {saveStatus === 'error' && (
+              {saveStatus === 'error' && (
                 <span style={{ fontSize: 12, color: 'var(--text-error)' }}>Error</span>
               )}
               <button
@@ -445,17 +483,21 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
             />
           </div>
         ) : isEditing ? (
-          <Suspense fallback={
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              height: '100%',
-              color: 'var(--text-muted)' 
-            }}>
-              Loading editor...
-            </div>
-          }>
+          <Suspense
+            fallback={
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                Loading editor...
+              </div>
+            }
+          >
             <CodeMirrorEditor
               content={modifiedContent}
               language={filePath ? getLanguageForExt(filePath) : 'plaintext'}
@@ -467,34 +509,37 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
               onSave={handleSave}
             />
           </Suspense>
-        ) : (
-          viewMode === 'markdown' ? (
+        ) : viewMode === 'markdown' ? (
+          <div
+            style={{
+              height: '100%',
+              overflowY: 'auto',
+              background: 'var(--bg-tertiary)',
+              padding: '24px 32px'
+            }}
+          >
             <div
+              ref={markdownRef}
+              className="markdown-body"
+              dangerouslySetInnerHTML={{ __html: renderedHtml }}
+              style={{ maxWidth: 800 }}
+            />
+          </div>
+        ) : (
+          <div style={{ height: '100%', overflow: 'auto', background: 'var(--bg-tertiary)' }}>
+            <table
               style={{
-                height: '100%',
-                overflowY: 'auto',
-                background: 'var(--bg-tertiary)',
-                padding: '24px 32px'
-              }}
-            >
-              <div
-                className="markdown-body"
-                dangerouslySetInnerHTML={{ __html: renderedHtml }}
-                style={{ maxWidth: 800 }}
-              />
-            </div>
-          ) : (
-            <div style={{ height: '100%', overflow: 'auto', background: 'var(--bg-tertiary)' }}>
-              <table style={{
                 borderCollapse: 'collapse',
                 fontFamily,
                 fontSize: codeFontSize,
                 lineHeight: '20px'
-              }}>
-                <tbody>
-                  {content.split('\n').map((line, i) => (
-                    <tr key={i}>
-                      <td style={{
+              }}
+            >
+              <tbody>
+                {content.split('\n').map((line, i) => (
+                  <tr key={i}>
+                    <td
+                      style={{
                         padding: '0 12px 0 16px',
                         textAlign: 'right',
                         color: 'var(--text-dim)',
@@ -502,25 +547,31 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
                         whiteSpace: 'nowrap',
                         verticalAlign: 'top',
                         width: 1
-                      }}>{i + 1}</td>
-                      <td style={{
+                      }}
+                    >
+                      {i + 1}
+                    </td>
+                    <td
+                      style={{
                         padding: '0 16px 0 12px',
                         whiteSpace: wordWrap ? 'pre-wrap' : 'pre',
                         wordBreak: wordWrap ? 'break-all' : undefined,
                         color: 'var(--text-primary)'
-                      }}>
-                        {viewMode === 'code' ? (
-                          <span dangerouslySetInnerHTML={{ __html: renderedHtml.split('\n')[i] || '' }} />
-                        ) : (
-                          line
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )
+                      }}
+                    >
+                      {viewMode === 'code' ? (
+                        <span
+                          dangerouslySetInnerHTML={{ __html: renderedHtml.split('\n')[i] || '' }}
+                        />
+                      ) : (
+                        line
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
