@@ -33,6 +33,11 @@ const api = {
   writeFile: (filePath: string, content: string) =>
     ipcRenderer.invoke('fs:writeFile', filePath, content),
   readFileAsDataURL: (filePath: string) => ipcRenderer.invoke('fs:readFileAsDataURL', filePath),
+  createFile: (filePath: string) => ipcRenderer.invoke('fs:createFile', filePath),
+  createDir: (dirPath: string) => ipcRenderer.invoke('fs:createDir', dirPath),
+  deletePath: (targetPath: string) => ipcRenderer.invoke('fs:delete', targetPath),
+  renamePath: (oldPath: string, newPath: string) =>
+    ipcRenderer.invoke('fs:rename', oldPath, newPath),
 
   watchFile: (filePath: string): void => {
     ipcRenderer.send('fs:watchFile', filePath)

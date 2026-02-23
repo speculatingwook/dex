@@ -509,6 +509,59 @@ function setupFileSystemIPC(): void {
       return { content: '', language: 'plaintext', error: (err as Error).message }
     }
   })
+
+  ipcMain.handle('fs:createFile', async (_event, filePath: string) => {
+    if (!isPathSafe(filePath)) {
+      return { success: false, error: 'Access denied' }
+    }
+    try {
+      await fs.writeFile(filePath, '', 'utf-8')
+      return { success: true, error: null }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('fs:createDir', async (_event, dirPath: string) => {
+    if (!isPathSafe(dirPath)) {
+      return { success: false, error: 'Access denied' }
+    }
+    try {
+      await fs.mkdir(dirPath, { recursive: true })
+      return { success: true, error: null }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('fs:delete', async (_event, targetPath: string) => {
+    if (!isPathSafe(targetPath)) {
+      return { success: false, error: 'Access denied' }
+    }
+    try {
+      const stat = await fs.stat(targetPath)
+      if (stat.isDirectory()) {
+        await fs.rm(targetPath, { recursive: true })
+      } else {
+        await fs.unlink(targetPath)
+      }
+      return { success: true, error: null }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('fs:rename', async (_event, oldPath: string, newPath: string) => {
+    if (!isPathSafe(oldPath) || !isPathSafe(newPath)) {
+      return { success: false, error: 'Access denied' }
+    }
+    try {
+      await fs.rename(oldPath, newPath)
+      return { success: true, error: null }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  })
 }
 
 function setupSettingsIPC(): void {

@@ -13,6 +13,7 @@ function AppInner(): React.JSX.Element {
   const TITLEBAR_HEIGHT = 40
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [leftCollapsed, setLeftCollapsed] = useState(false)
+  const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [SettingsModal, setSettingsModal] = useState<React.ComponentType<{
     isOpen: boolean
@@ -39,7 +40,7 @@ function AppInner(): React.JSX.Element {
     }
   }, [])
 
-  const handleFileSelect = useCallback((path: string) => {
+  const handleFileSelect = useCallback((path: string | null) => {
     setSelectedFile(path)
   }, [])
 
@@ -70,9 +71,14 @@ function AppInner(): React.JSX.Element {
         <SplitPanel
           leftCollapsed={leftCollapsed}
           onToggleCollapse={toggleCollapse}
+          fileTreeCollapsed={fileTreeCollapsed}
           left={
             <div style={{ display: 'flex', width: '100%', height: '100%' }}>
-              <FileTree onSelectFile={handleFileSelect} />
+              <FileTree
+                onSelectFile={handleFileSelect}
+                collapsed={fileTreeCollapsed}
+                onCollapseChange={setFileTreeCollapsed}
+              />
               <DocumentViewer filePath={selectedFile} />
             </div>
           }

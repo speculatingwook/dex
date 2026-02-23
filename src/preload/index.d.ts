@@ -47,6 +47,13 @@ export interface Api {
     content: string
   ) => Promise<{ success: boolean; error: string | null }>
   readFileAsDataURL: (filePath: string) => Promise<FileDataURLResult>
+  createFile: (filePath: string) => Promise<{ success: boolean; error: string | null }>
+  createDir: (dirPath: string) => Promise<{ success: boolean; error: string | null }>
+  deletePath: (targetPath: string) => Promise<{ success: boolean; error: string | null }>
+  renamePath: (
+    oldPath: string,
+    newPath: string
+  ) => Promise<{ success: boolean; error: string | null }>
 
   watchFile: (filePath: string) => void
   unwatchFile: () => void

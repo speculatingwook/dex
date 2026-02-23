@@ -1,10 +1,14 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { FILETREE_COLLAPSED_WIDTH } from './FileTree'
+
+const DIVIDER_WIDTH = 4
 
 interface SplitPanelProps {
   left: ReactNode
   right: ReactNode
   leftCollapsed: boolean
   onToggleCollapse: () => void
+  fileTreeCollapsed?: boolean
   minLeftWidth?: number
   minRightWidth?: number
 }
@@ -14,6 +18,7 @@ export default function SplitPanel({
   right,
   leftCollapsed,
   onToggleCollapse,
+  fileTreeCollapsed = false,
   minLeftWidth = 200,
   minRightWidth = 300
 }: SplitPanelProps): React.JSX.Element {
@@ -21,6 +26,8 @@ export default function SplitPanel({
   const isDragging = useRef(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const widthBeforeCollapse = useRef<number>(0)
+  const widthBeforeFileTreeCollapse = useRef<number>(0)
+  const prevFileTreeCollapsed = useRef(fileTreeCollapsed)
 
   useEffect(() => {
     if (containerRef.current && leftWidth === null) {
@@ -71,6 +78,34 @@ export default function SplitPanel({
     }
   }, [leftCollapsed])
 
+  // Auto 1:1 split when file tree collapses
+  useEffect(() => {
+    if (leftCollapsed || !containerRef.current) return
+
+    const wasCollapsed = prevFileTreeCollapsed.current
+    prevFileTreeCollapsed.current = fileTreeCollapsed
+
+    if (fileTreeCollapsed && !wasCollapsed) {
+      // Save current width and calculate equal split
+      if (leftWidth) {
+        widthBeforeFileTreeCollapse.current = leftWidth
+      }
+      const containerWidth = containerRef.current.getBoundingClientRect().width
+      // DocViewer width = leftWidth - FILETREE_COLLAPSED_WIDTH
+      // Terminal width = containerWidth - leftWidth - DIVIDER_WIDTH
+      // For DocViewer = Terminal:
+      //   leftWidth - FILETREE_COLLAPSED_WIDTH = containerWidth - leftWidth - DIVIDER_WIDTH
+      //   2 * leftWidth = containerWidth + FILETREE_COLLAPSED_WIDTH - DIVIDER_WIDTH
+      const equalSplit = Math.floor((containerWidth + FILETREE_COLLAPSED_WIDTH - DIVIDER_WIDTH) / 2)
+      setLeftWidth(Math.min(Math.max(equalSplit, minLeftWidth), containerWidth - minRightWidth))
+    } else if (!fileTreeCollapsed && wasCollapsed) {
+      // Restore previous width
+      if (widthBeforeFileTreeCollapse.current > 0) {
+        setLeftWidth(widthBeforeFileTreeCollapse.current)
+      }
+    }
+  }, [fileTreeCollapsed, leftCollapsed, leftWidth, minLeftWidth, minRightWidth])
+
   const resolvedLeftWidth = leftCollapsed ? 0 : (leftWidth ?? 600)
 
   return (
@@ -88,7 +123,7 @@ export default function SplitPanel({
       </div>
       <div
         style={{
-          width: 4,
+          width: DIVIDER_WIDTH,
           flexShrink: 0,
           cursor: 'col-resize',
           background: 'var(--divider)',
