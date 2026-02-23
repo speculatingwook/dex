@@ -562,6 +562,32 @@ function setupFileSystemIPC(): void {
       return { success: false, error: (err as Error).message }
     }
   })
+
+  ipcMain.handle('fs:move', async (_event, sourcePath: string, destDir: string) => {
+    if (!isPathSafe(sourcePath) || !isPathSafe(destDir)) {
+      return { success: false, error: 'Access denied' }
+    }
+    try {
+      const fileName = path.basename(sourcePath)
+      const destPath = path.join(destDir, fileName)
+      try {
+        await fs.access(destPath)
+        return { success: false, error: `"${fileName}" already exists in the destination` }
+      } catch {
+        /* destination does not exist — safe to proceed */
+      }
+      await fs.rename(sourcePath, destPath)
+      return { success: true, error: null }
+    } catch (err) {
+      return { success: false, error: (err as Error).message }
+    }
+  })
+
+  ipcMain.handle('shell:openExternal', (_event, url: string) => {
+    if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('mailto:'))) {
+      shell.openExternal(url)
+    }
+  })
 }
 
 function setupSettingsIPC(): void {

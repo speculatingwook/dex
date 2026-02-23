@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
+import { useState, useEffect, useRef, useCallback, lazy, Suspense, memo } from 'react'
 import { Marked } from 'marked'
 import { markedHighlight } from 'marked-highlight'
 import hljs from 'highlight.js'
@@ -136,11 +136,24 @@ function resolveMermaidBlocks(html: string): string {
   )
 }
 
-interface DocumentViewerProps {
-  filePath: string | null
+function resolveRelativePath(baseDir: string, relativePath: string): string {
+  const parts = baseDir.split('/').filter(Boolean)
+  for (const segment of relativePath.split('/')) {
+    if (segment === '..') {
+      if (parts.length > 0) parts.pop()
+    } else if (segment !== '.' && segment !== '') {
+      parts.push(segment)
+    }
+  }
+  return (baseDir.startsWith('/') ? '/' : '') + parts.join('/')
 }
 
-export default function DocumentViewer({ filePath }: DocumentViewerProps): React.JSX.Element {
+interface DocumentViewerProps {
+  filePath: string | null
+  onNavigate?: (path: string) => void
+}
+
+const DocumentViewer = memo(function DocumentViewer({ filePath, onNavigate }: DocumentViewerProps): React.JSX.Element {
   const [content, setContent] = useState('')
   const [renderedHtml, setRenderedHtml] = useState('')
   const [imageDataUrl, setImageDataUrl] = useState('')
@@ -254,19 +267,71 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
     }
   }, [filePath, loadFileContent])
 
+  const prevThemeRef = useRef(resolvedTheme)
   useEffect(() => {
     if (viewMode !== 'markdown' || isEditing || !markdownRef.current) return
+    const container = markdownRef.current
+    const themeChanged = prevThemeRef.current !== resolvedTheme
+    prevThemeRef.current = resolvedTheme
 
+    // Theme changed: reset innerHTML to force mermaid re-render with new theme
+    if (themeChanged) {
+      container.innerHTML = renderedHtml
+    }
+
+    const nodes = Array.from(container.querySelectorAll<HTMLElement>('.mermaid:not([data-processed])'))
+    if (nodes.length === 0) return
     mermaid.initialize({
       startOnLoad: false,
       theme: resolvedTheme === 'dark' ? 'dark' : 'default',
       securityLevel: 'strict'
     })
 
-    void mermaid.run({
-      nodes: Array.from(markdownRef.current.querySelectorAll('.mermaid'))
-    })
-  }, [renderedHtml, resolvedTheme, viewMode, isEditing])
+    void mermaid.run({ nodes })
+  })
+
+  // Handle link clicks in markdown: relative paths navigate, external links open in browser
+  useEffect(() => {
+    const container = markdownRef.current
+    if (!container || viewMode !== 'markdown' || isEditing) return
+
+    const handleLinkClick = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement
+      const anchor = target.closest('a') as HTMLAnchorElement | null
+      if (!anchor) return
+
+      const href = anchor.getAttribute('href')
+      if (!href) return
+
+      e.preventDefault()
+
+      // Anchor-only: scroll to heading within current document
+      if (href.startsWith('#')) {
+        const id = decodeURIComponent(href.slice(1))
+        const el = container.querySelector(`[id="${CSS.escape(id)}"]`)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+
+      // External links: open in system browser
+      if (/^https?:\/\//i.test(href) || href.startsWith('mailto:')) {
+        void window.api.openExternal(href)
+        return
+      }
+
+      // Relative links: resolve and navigate within app
+      if (onNavigate && filePath) {
+        const [pathPart] = href.split('#')
+        const decodedPath = decodeURIComponent(pathPart)
+        const dir = filePath.split('/').slice(0, -1).join('/')
+        const resolved = resolveRelativePath(dir, decodedPath)
+        onNavigate(resolved)
+      }
+    }
+
+    container.addEventListener('click', handleLinkClick)
+    return () => container.removeEventListener('click', handleLinkClick)
+  }, [viewMode, isEditing, filePath, onNavigate])
 
   const handleSave = async (): Promise<void> => {
     if (!filePath) return
@@ -576,4 +641,6 @@ export default function DocumentViewer({ filePath }: DocumentViewerProps): React
       </div>
     </div>
   )
-}
+})
+
+export default DocumentViewer

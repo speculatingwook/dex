@@ -12,6 +12,7 @@ interface UseFileTreeReturn {
   createDir: (parentDir: string, name: string) => Promise<boolean>
   deletePath: (targetPath: string) => Promise<boolean>
   renamePath: (oldPath: string, newName: string) => Promise<boolean>
+  movePath: (sourcePath: string, targetDir: string) => Promise<boolean>
 }
 
 export function useFileTree(onFileSelect: (path: string | null) => void): UseFileTreeReturn {
@@ -144,6 +145,28 @@ export function useFileTree(onFileSelect: (path: string | null) => void): UseFil
     [loadDir, onFileSelect]
   )
 
+
+  const movePath = useCallback(
+    async (sourcePath: string, targetDir: string): Promise<boolean> => {
+      const result = await window.api.movePath(sourcePath, targetDir)
+      if (result.success) {
+        const sourceParent = sourcePath.split('/').slice(0, -1).join('/')
+        const fileName = sourcePath.split('/').pop()!
+        const destPath = targetDir + '/' + fileName
+        await loadDir(sourceParent)
+        await loadDir(targetDir)
+        if (selectedFileRef.current === sourcePath) {
+          setSelectedFile(destPath)
+          onFileSelect(destPath)
+        }
+      } else if (result.error) {
+        window.alert(result.error)
+      }
+      return result.success
+    },
+    [loadDir, onFileSelect]
+  )
+
   useEffect(() => {
     if (!rootDir) return
 
@@ -170,6 +193,7 @@ export function useFileTree(onFileSelect: (path: string | null) => void): UseFil
     createFile,
     createDir,
     deletePath,
-    renamePath
+    renamePath,
+    movePath
   }
 }

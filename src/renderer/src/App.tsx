@@ -79,7 +79,7 @@ function AppInner(): React.JSX.Element {
                 collapsed={fileTreeCollapsed}
                 onCollapseChange={setFileTreeCollapsed}
               />
-              <DocumentViewer filePath={selectedFile} />
+              <DocumentViewer filePath={selectedFile} onNavigate={handleFileSelect} />
             </div>
           }
           right={<TerminalPanel />}

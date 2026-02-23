@@ -169,7 +169,8 @@ export default function FileTree({
     createFile,
     createDir,
     deletePath,
-    renamePath
+    renamePath,
+    movePath
   } = useFileTree(onSelectFile)
 
   const [contextMenu, setContextMenu] = useState<{
@@ -331,7 +332,21 @@ export default function FileTree({
       </div>
 
       {!collapsed && (
-        <div style={{ flex: 1, overflowY: 'auto', paddingTop: 4, paddingBottom: 4 }}>
+        <div
+          style={{ flex: 1, overflowY: 'auto', paddingTop: 4, paddingBottom: 4 }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+          }}
+          onDrop={(e) => {
+            e.preventDefault()
+            const sourcePath = e.dataTransfer.getData('text/plain')
+            if (!sourcePath) return
+            const sourceParent = sourcePath.split('/').slice(0, -1).join('/')
+            if (sourceParent === rootDir) return
+            void movePath(sourcePath, rootDir)
+          }}
+        >
           {isCreatingInRoot && (
             <InlineInput
               defaultValue=""
@@ -358,6 +373,7 @@ export default function FileTree({
               creatingIn={creatingIn}
               onCreateSubmit={handleCreateSubmit}
               onCreateCancel={() => setCreatingIn(null)}
+              onMovePath={movePath}
             />
           ))}
         </div>

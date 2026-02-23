@@ -16,6 +16,7 @@ interface FileTreeItemProps {
   creatingIn: { dirPath: string; type: 'file' | 'dir' } | null
   onCreateSubmit: (parentDir: string, name: string, type: 'file' | 'dir') => void
   onCreateCancel: () => void
+  onMovePath: (sourcePath: string, targetDir: string) => void
 }
 
 const FILE_ICONS: Record<string, string> = {
@@ -141,13 +142,16 @@ export default function FileTreeItem({
   onRenameCancel,
   creatingIn,
   onCreateSubmit,
-  onCreateCancel
+  onCreateCancel,
+  onMovePath
 }: FileTreeItemProps): React.JSX.Element {
   const isExpanded = expandedDirs.has(entry.path)
   const isSelected = selectedFile === entry.path
   const children = entries.get(entry.path) || []
   const isRenaming = renamingPath === entry.path
   const isCreatingHere = creatingIn?.dirPath === entry.path
+  const [dropHighlight, setDropHighlight] = useState(false)
+
 
   const handleClick = (): void => {
     if (isRenaming) return
@@ -178,7 +182,8 @@ export default function FileTreeItem({
     onRenameCancel,
     creatingIn,
     onCreateSubmit,
-    onCreateCancel
+    onCreateCancel,
+    onMovePath
   }
 
   const renderChildren = (): React.JSX.Element | null => {
@@ -201,6 +206,41 @@ export default function FileTreeItem({
     )
   }
 
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>): void => {
+    if (isRenaming) {
+      e.preventDefault()
+      return
+    }
+    e.dataTransfer.setData('text/plain', entry.path)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
+    if (!entry.isDirectory) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDropHighlight(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>): void => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return
+    setDropHighlight(false)
+  }
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDropHighlight(false)
+    if (!entry.isDirectory) return
+    const sourcePath = e.dataTransfer.getData('text/plain')
+    if (!sourcePath) return
+    if (sourcePath === entry.path) return
+    const sourceParent = sourcePath.split('/').slice(0, -1).join('/')
+    if (sourceParent === entry.path) return
+    if (entry.path.startsWith(sourcePath + '/')) return
+    onMovePath(sourcePath, entry.path)
+  }
+
   if (isRenaming) {
     return (
       <div>
@@ -219,6 +259,11 @@ export default function FileTreeItem({
   return (
     <div>
       <div
+        draggable={!isRenaming}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         style={{
@@ -232,17 +277,23 @@ export default function FileTreeItem({
           gap: 4,
           fontSize: 13,
           lineHeight: '20px',
-          background: isSelected ? 'var(--bg-selected)' : 'transparent',
+          background: dropHighlight
+            ? 'var(--bg-hover)'
+            : isSelected
+              ? 'var(--bg-selected)'
+              : 'transparent',
           color: isSelected ? 'var(--text-heading)' : 'var(--text-secondary)',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
-          textOverflow: 'ellipsis'
+          textOverflow: 'ellipsis',
+          outline: dropHighlight ? '1px solid var(--accent)' : 'none',
+          outlineOffset: -1
         }}
         onMouseEnter={(e) => {
-          if (!isSelected) e.currentTarget.style.background = 'var(--bg-hover)'
+          if (!isSelected && !dropHighlight) e.currentTarget.style.background = 'var(--bg-hover)'
         }}
         onMouseLeave={(e) => {
-          if (!isSelected) e.currentTarget.style.background = 'transparent'
+          if (!isSelected && !dropHighlight) e.currentTarget.style.background = 'transparent'
         }}
       >
         {entry.isDirectory && (

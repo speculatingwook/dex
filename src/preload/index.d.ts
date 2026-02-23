@@ -54,6 +54,11 @@ export interface Api {
     oldPath: string,
     newPath: string
   ) => Promise<{ success: boolean; error: string | null }>
+  movePath: (
+    sourcePath: string,
+    destDir: string
+  ) => Promise<{ success: boolean; error: string | null }>
+  openExternal: (url: string) => Promise<void>
 
   watchFile: (filePath: string) => void
   unwatchFile: () => void

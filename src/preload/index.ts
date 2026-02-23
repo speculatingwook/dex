@@ -38,6 +38,9 @@ const api = {
   deletePath: (targetPath: string) => ipcRenderer.invoke('fs:delete', targetPath),
   renamePath: (oldPath: string, newPath: string) =>
     ipcRenderer.invoke('fs:rename', oldPath, newPath),
+  movePath: (sourcePath: string, destDir: string) =>
+    ipcRenderer.invoke('fs:move', sourcePath, destDir),
+  openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
 
   watchFile: (filePath: string): void => {
     ipcRenderer.send('fs:watchFile', filePath)
